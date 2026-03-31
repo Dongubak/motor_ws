@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m py_compile /home/gardentech/motor_ws/src/motor_control/motor_control/homing_action_server.py)",
+      "Bash(python3 -m py_compile /home/gardentech/motor_ws/src/motor_control/motor_control/motor_driver_node.py)",
+      "Bash(python3 -m pip --version)",
+      "Bash(apt-cache show:*)",
+      "Bash(dpkg -l python3-pip)",
+      "Bash(ros2 pkg:*)"
+    ]
+  }
+}

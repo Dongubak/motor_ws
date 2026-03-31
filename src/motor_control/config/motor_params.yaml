@@ -1,0 +1,79 @@
+motor_driver_node:
+  ros__parameters:
+    # EtherCAT 네트워크 인터페이스 이름 (ifconfig 또는 ip link로 확인)
+    ifname: "enP8p1s0"
+
+    # ──────────────────────────────────────────────────────────
+    # 테스트 모드별 슬레이브 설정
+    # 사용하지 않는 축은 인덱스를 -1로 설정
+    #
+    # [X축 단독 테스트 - 갠트리 분리 X 드라이버]
+    # num_slaves: 1
+    # x_slave_idx:  0    # X축 드라이버
+    # z1_slave_idx: -1   # 비활성
+    # z2_slave_idx: -1   # 비활성
+    #
+    # [Z축 단독 테스트 - 갠트리 분리 Z 드라이버 1대]
+    # num_slaves: 1
+    # x_slave_idx:  -1   # 비활성
+    # z1_slave_idx: 0    # Z 드라이버
+    # z2_slave_idx: -1   # 비활성
+    #
+    # [Z축 2대 테스트]
+    # num_slaves: 2
+    # x_slave_idx:  -1   # 비활성
+    # z1_slave_idx: 0
+    # z2_slave_idx: 1
+    #
+    # [전체 갠트리 (X + Z1 + Z2)]
+    num_slaves: 3
+    x_slave_idx:  0
+    z1_slave_idx: 1
+    z2_slave_idx: 2
+    # ──────────────────────────────────────────────────────────
+
+    # PDO 제어 사이클 (ms) — 1ms 권장 (실시간 커널 사용 시)
+    pdo_cycle_ms: 10
+
+    # 기본 속도 / 가감속
+    # default_velocity_rpm: action goal에 velocity_mm_s 미지정 시 사용
+    # default_accel_rpm_s:  가속도 — 너무 낮으면 고속 지정해도 도달 전에 감속 시작
+    #   X축 기준: 300 RPM/s → 1초에 300RPM까지 가속 (≈ 60mm/s²)
+    default_velocity_rpm: 30.0     # [RPM]  ≈ 6 mm/s (X), 3 mm/s (Z)
+    default_accel_rpm_s:  1000.0    # [RPM/sec]
+
+    # 호밍 방법 (CiA 402 Homing Method 0x6098)
+    # X축: Method 1  — 역방향(-) → NOT 리밋 스위치 → Index 펄스
+    # Z축: Method 2  — 정방향(+) → POT 리밋 스위치 → Index 펄스
+    x_homing_method: 1
+    z_homing_method: 2
+
+    # 호밍 속도 [RPM]
+    # homing_fast_rpm: 리밋 스위치 탐색 속도 (권장: 10~30)
+    # homing_slow_rpm: Index 펄스 탐색 속도   (권장: 1~5)
+    homing_fast_rpm: 30.0
+    homing_slow_rpm: 1.0
+
+    # 호밍 타임아웃 [초] — 이 시간 내 완료되지 않으면 ABORTED
+    homing_timeout_s: 300.0
+
+    # Cross Coupling (Z축 이중 모터 동기화)
+    enable_coupling:    true
+    coupling_gain:      0.05        # [1/sec]
+    max_sync_error_mm:  10.0        # 긴급정지 임계값 [mm]
+    ma_window:          5           # 이동평균 윈도우 (사이클)
+
+    # 소프트웨어 리밋
+    # 호밍 완료 후 원점(0mm) 기준 이동 가능 범위
+    # X축: NOT 리밋 스위치가 원점 → 정방향(+)으로 이동하므로 min=0
+    # Z축: POT 리밋 스위치가 원점 → 정방향(+)으로 이동하므로 min=0
+    z_soft_limit_min_mm:  -1500.0
+    z_soft_limit_max_mm:  0.1
+    x_soft_limit_min_mm:  0.0
+    x_soft_limit_max_mm:  1500.0
+
+    # 기본 이동 속도 [mm/s]
+    default_velocity_mm_s: 75.0
+
+    # AxisState 발행 주기 [Hz]
+    state_publish_hz: 10.0

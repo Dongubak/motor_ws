@@ -1,0 +1,11 @@
+# Goal
+bool force_rehome   # 이미 호밍 완료된 경우에도 재실행 여부
+---
+# Result
+bool    success
+string  message
+float64 z_home_position_mm
+---
+# Feedback
+string  phase           # "moving_to_limit", "reversing", "seeking_index", "done"
+float64 current_z_mm

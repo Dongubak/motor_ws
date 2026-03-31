@@ -1,0 +1,17 @@
+# Goal
+float64 x_target_mm    # X축 목표 위치 [mm] (-1 = 현 위치 유지)
+float64 z_target_mm    # Z축 목표 위치 [mm] (-1 = 현 위치 유지)
+float64 velocity_mm_s  # 이동 속도 [mm/s] (0 = 기본값 사용)
+bool    force_move     # true = 호밍 미완료 상태에서도 강제 이동 (소프트 리밋 무시)
+---
+# Result
+bool    success
+float64 x_final_mm
+float64 z_final_mm
+string  message
+---
+# Feedback
+float64 x_current_mm
+float64 z_current_mm
+float64 x_remaining_mm
+float64 z_remaining_mm

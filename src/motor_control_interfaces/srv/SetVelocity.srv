@@ -1,0 +1,5 @@
+float64 velocity_mm_s   # 이동 속도 [mm/s]
+string  axis            # 대상 축: "x", "z", "all"
+---
+bool    success
+string  message

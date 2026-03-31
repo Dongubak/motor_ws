@@ -1,0 +1,10 @@
+# 요청 없음 (단발 쿼리)
+---
+bool    ethercat_connected
+string  cia402_state
+bool    x_homed
+bool    z_homed
+float64 x_position_mm
+float64 z_position_mm
+string  error_code
+bool    sync_fault
