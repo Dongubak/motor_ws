@@ -55,7 +55,7 @@ motor_driver_node:
     homing_slow_rpm: 1.0
 
     # 호밍 타임아웃 [초] — 이 시간 내 완료되지 않으면 ABORTED
-    homing_timeout_s: 300.0
+    homing_timeout_s: 600.0
 
     # Cross Coupling (Z축 이중 모터 동기화)
     enable_coupling:    true

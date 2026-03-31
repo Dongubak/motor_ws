@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "VELOCITY_GUIDE.md",
+                "file": "RPLIDAR_ROS2_PLAN.md",
                 "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "VELOCITY_GUIDE"
+              "title": "RPLIDAR_ROS2_PLAN"
             }
           },
           {
@@ -108,7 +108,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "VELOCITY_GUIDE.md",
+                "file": "RPLIDAR_ROS2_PLAN.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +118,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "VELOCITY_GUIDE 의 백링크"
+              "title": "RPLIDAR_ROS2_PLAN 의 백링크"
             }
           },
           {
@@ -127,12 +127,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "VELOCITY_GUIDE.md",
+                "file": "RPLIDAR_ROS2_PLAN.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "VELOCITY_GUIDE 의 나가는 링크"
+              "title": "RPLIDAR_ROS2_PLAN 의 나가는 링크"
             }
           },
           {
@@ -170,13 +170,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "VELOCITY_GUIDE.md",
+                "file": "RPLIDAR_ROS2_PLAN.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "VELOCITY_GUIDE 의 개요"
+              "title": "RPLIDAR_ROS2_PLAN 의 개요"
             }
           }
         ]
@@ -199,9 +199,25 @@
   },
   "active": "7a150d4fbdd92774",
   "lastOpenFiles": [
+    "VELOCITY_GUIDE.md",
+    "RPLIDAR_ROS2_PLAN.md",
+    "RPLIDAR_ROS2_PLAN.md.tmp.4570.1774936635336",
+    "install/sllidar_ros2/share/sllidar_ros2/launch/__pycache__/view_sllidar_s2_launch.cpython-310.pyc",
+    "install/sllidar_ros2/share/sllidar_ros2/launch/__pycache__",
+    "install/setup.zsh",
+    "install/local_setup.zsh",
+    "install/setup.bash",
+    "install/local_setup.bash",
+    "install/setup.sh",
+    "install/_local_setup_util_sh.py",
+    "install/local_setup.sh",
+    "src/sllidar_ros2/rplidar_A2.png",
+    "src/sllidar_ros2/rplidar_A1.png",
+    "src/sllidar_ros2/README.md",
+    "sllidar_ros2/rplidar_A2.png",
+    "sllidar_ros2/rplidar_A1.png",
+    "sllidar_ros2/README.md",
     "README.md",
-    "README.md.tmp.4570.1774935094852",
-    "TEST_Z_AXIS.md",
-    "VELOCITY_GUIDE.md"
+    "TEST_Z_AXIS.md"
   ]
 }
