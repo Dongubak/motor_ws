@@ -6,7 +6,8 @@
       "Bash(python3 -m pip --version)",
       "Bash(apt-cache show:*)",
       "Bash(dpkg -l python3-pip)",
-      "Bash(ros2 pkg:*)"
+      "Bash(ros2 pkg:*)",
+      "Bash(ls /home/gardentech/motor_ws/src/motor_control/motor_control/*.py)"
     ]
   }
 }
