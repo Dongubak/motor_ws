@@ -259,9 +259,9 @@ ros2 service call /motor/get_status motor_control_interfaces/srv/GetDriveStatus
 
 ## 10. 문서
 
-| 파일 | 내용 |
-|------|------|
+| 파일                                             | 내용                  |
+| ---------------------------------------------- | ------------------- |
 | [MOTOR_WS_GUIDE.md](.source/MOTOR_WS_GUIDE.md) | 전체 시스템 아키텍처 및 구동 원리 |
-| [TEST_X_AXIS.md](.source/TEST_X_AXIS.md) | X축 단독 테스트 절차 |
-| [TEST_Z_AXIS.md](TEST_Z_AXIS.md) | Z축 단독 테스트 절차 |
-| [VELOCITY_GUIDE.md](VELOCITY_GUIDE.md) | 속도·가속도 설정 및 단위 변환 |
+| [TEST_X_AXIS.md](TEST_X_AXIS.md)               | X축 단독 테스트 절차        |
+| [TEST_Z_AXIS.md](TEST_Z_AXIS.md)               | Z축 단독 테스트 절차        |
+| [VELOCITY_GUIDE.md](VELOCITY_GUIDE.md)         | 속도·가속도 설정 및 단위 변환   |
