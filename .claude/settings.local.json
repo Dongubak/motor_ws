@@ -7,7 +7,11 @@
       "Bash(apt-cache show:*)",
       "Bash(dpkg -l python3-pip)",
       "Bash(ros2 pkg:*)",
-      "Bash(ls /home/gardentech/motor_ws/src/motor_control/motor_control/*.py)"
+      "Bash(ls /home/gardentech/motor_ws/src/motor_control/motor_control/*.py)",
+      "Bash(ip link:*)",
+      "Read(//home/ihow/motor_ws/**)",
+      "Bash(python3 -c \"import pysoem\")",
+      "Bash(ros2 --version)"
     ]
   }
 }
