@@ -1,11 +1,14 @@
 # Goal
-bool force_rehome   # 이미 호밍 완료된 경우에도 재실행 여부
+int32 gantry_index   # 0=갠트리0, 1=갠트리1, 2=동시 호밍
+bool  force_rehome   # 이미 호밍 완료된 경우에도 재실행 여부
 ---
 # Result
 bool    success
 string  message
-float64 z_home_position_mm
+float64 gantry0_z_home_position_mm
+float64 gantry1_z_home_position_mm
 ---
 # Feedback
-string  phase           # "moving_to_limit", "reversing", "seeking_index", "done"
-float64 current_z_mm
+string  phase                  # "in_progress" | "idle"
+float64 gantry0_current_z_mm
+float64 gantry1_current_z_mm

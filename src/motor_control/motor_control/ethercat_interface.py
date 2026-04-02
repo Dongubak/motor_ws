@@ -243,8 +243,7 @@ def _ethercat_process_loop(
     max_sync_error_pulse: int,
     coupling_params,        # mp.Array('d', 2): [0]=gain [1]=enabled
     ma_window: int,
-    z1_idx: int = -1,       # Z1 슬레이브 인덱스 (동기화 모니터링용)
-    z2_idx: int = -1,       # Z2 슬레이브 인덱스 (동기화 모니터링용)
+    z_pairs=None,           # [(z1_idx, z2_idx), ...] 갠트리별 Z쌍 (동기화·커플링용)
 ):
     master = pysoem.Master()
 
@@ -266,9 +265,12 @@ def _ethercat_process_loop(
         'homing_b4_cycles': 0,       # rising edge 확보용 카운터
     } for _ in range(num_slaves)]
 
+    z_pairs = z_pairs or []
+
     is_running          = True
     sync_error_detected = False
-    diff_histories = [deque(maxlen=ma_window)]  # Z1↔Z2 동기화 오차 이력 (인덱스 0만 사용)
+    # 갠트리별 Z쌍에 대한 동기화 오차 이력 (z_pairs 순서와 1:1 대응)
+    diff_histories = [deque(maxlen=ma_window) for _ in z_pairs]
     hold_max_vel = mm_to_pulse(POSITION_HOLD_MAX_VEL_MM_S, 'z')
 
     # ── 초기 설정 명령 수집 (버스 열기 전) ──
@@ -427,6 +429,7 @@ def _ethercat_process_loop(
                     for h in diff_histories:
                         h.clear()
                     print(f"[원점] 모터 {idx}: offset={pos}")
+
                 elif cmd == 'MOVE_TO_MM':
                     if sync_error_detected:
                         print(f"[경고] 동기화 오류 상태. 모터 {idx} 이동 무시")
@@ -512,35 +515,37 @@ def _ethercat_process_loop(
                 and not local_states[i]['homing_active']
             ]
 
-            # ── 5. 동기화 모니터링 (Z1 ↔ Z2 쌍만) ──
-            # X축과 Z축은 서로 다른 단위계이므로 비교하지 않음
-            if (z1_idx >= 0 and z2_idx >= 0 and not sync_error_detected and
-                    local_states[z1_idx]['trajectory'] is not None and
-                    local_states[z2_idx]['trajectory'] is not None):
-                diff = abs(relative_positions[z1_idx] - relative_positions[z2_idx])
-                diff_histories[0].append(diff)
-                avg_diff = sum(diff_histories[0]) / len(diff_histories[0])
+            # ── 5. 동기화 모니터링 (갠트리별 Z1↔Z2 쌍) ──
+            # 각 갠트리의 Z쌍을 독립적으로 모니터링
+            for pair_idx, (z1_idx, z2_idx) in enumerate(z_pairs):
+                if (z1_idx >= 0 and z2_idx >= 0 and not sync_error_detected and
+                        local_states[z1_idx]['trajectory'] is not None and
+                        local_states[z2_idx]['trajectory'] is not None):
+                    diff = abs(relative_positions[z1_idx] - relative_positions[z2_idx])
+                    diff_histories[pair_idx].append(diff)
+                    avg_diff = sum(diff_histories[pair_idx]) / len(diff_histories[pair_idx])
 
-                if avg_diff > max_sync_error_pulse:
-                    sync_error_detected = True
-                    for j in range(num_slaves):
-                        if local_states[j]['trajectory'] is not None:
-                            local_states[j]['trajectory']   = None
-                            local_states[j]['target_pulse'] = positions[j]
-                    avg_mm = pulse_to_mm(avg_diff, 'z')
-                    lim_mm = pulse_to_mm(max_sync_error_pulse, 'z')
-                    print(f"\n[긴급정지] Z축 동기화 오차 초과! "
-                          f"Z1-Z2 이동평균={avg_mm:.3f}mm, 임계={lim_mm:.3f}mm")
+                    if avg_diff > max_sync_error_pulse:
+                        sync_error_detected = True
+                        for j in range(num_slaves):
+                            if local_states[j]['trajectory'] is not None:
+                                local_states[j]['trajectory']   = None
+                                local_states[j]['target_pulse'] = positions[j]
+                        avg_mm = pulse_to_mm(avg_diff, 'z')
+                        lim_mm = pulse_to_mm(max_sync_error_pulse, 'z')
+                        print(f"\n[긴급정지] 갠트리{pair_idx} Z축 동기화 오차 초과! "
+                              f"Z1-Z2 이동평균={avg_mm:.3f}mm, 임계={lim_mm:.3f}mm")
 
-            # ── 6. Cross Coupling 보정값 (Z1 ↔ Z2 쌍만) ──
+            # ── 6. Cross Coupling 보정값 (갠트리별 Z쌍 독립 적용) ──
             coupling_correction = [0] * num_slaves
-            if (coupling_enabled and not sync_error_detected and
-                    z1_idx >= 0 and z2_idx >= 0 and
-                    local_states[z1_idx]['trajectory'] is not None and
-                    local_states[z2_idx]['trajectory'] is not None):
-                avg_rel = (relative_positions[z1_idx] + relative_positions[z2_idx]) / 2.0
-                coupling_correction[z1_idx] = int(coupling_gain * (relative_positions[z1_idx] - avg_rel))
-                coupling_correction[z2_idx] = int(coupling_gain * (relative_positions[z2_idx] - avg_rel))
+            if coupling_enabled and not sync_error_detected:
+                for z1_idx, z2_idx in z_pairs:
+                    if (z1_idx >= 0 and z2_idx >= 0 and
+                            local_states[z1_idx]['trajectory'] is not None and
+                            local_states[z2_idx]['trajectory'] is not None):
+                        avg_rel = (relative_positions[z1_idx] + relative_positions[z2_idx]) / 2.0
+                        coupling_correction[z1_idx] = int(coupling_gain * (relative_positions[z1_idx] - avg_rel))
+                        coupling_correction[z2_idx] = int(coupling_gain * (relative_positions[z2_idx] - avg_rel))
 
             # ── 7. 각 슬레이브 제어 ──
             for i in range(num_slaves):
@@ -747,8 +752,14 @@ class EtherCATInterface:
                  coupling_gain: float = DEFAULT_COUPLING_GAIN,
                  enable_coupling: bool = True,
                  ma_window: int = DEFAULT_MA_WINDOW,
-                 z1_idx: int = -1,
-                 z2_idx: int = -1):
+                 z_pairs=None):
+        """
+        Parameters
+        ----------
+        z_pairs : list of (z1_idx, z2_idx) tuples
+            갠트리별 Z축 슬레이브 쌍. 동기화 모니터링과 Cross Coupling에 사용.
+            예: [(1, 2), (4, 5)] — 갠트리0: slaves 1,2 / 갠트리1: slaves 4,5
+        """
 
         self._adapter_name = adapter_name
         self._num_slaves   = num_slaves
@@ -762,6 +773,7 @@ class EtherCATInterface:
         self._coupling_params[1] = 1.0 if enable_coupling else 0.0
 
         self._max_sync_error_pulse = mm_to_pulse(max_sync_error_mm, 'z')
+        self._z_pairs = z_pairs or []
 
         self._process = mp.Process(
             target=_ethercat_process_loop,
@@ -771,8 +783,7 @@ class EtherCATInterface:
                 self._max_sync_error_pulse,
                 self._coupling_params,
                 ma_window,
-                z1_idx,
-                z2_idx,
+                self._z_pairs,
             ),
             daemon=True,
         )
@@ -856,6 +867,23 @@ class EtherCATInterface:
             if self._shared_states[i * SLOT_SIZE + IDX_SYNC_ERR] != 0:
                 return True
         return False
+
+    def has_fault(self) -> bool:
+        """어느 슬레이브든 CiA 402 Fault 상태(sw bit3=1)이면 True."""
+        for i in range(self._num_slaves):
+            sw = int(self._shared_states[i * SLOT_SIZE + IDX_STATUS])
+            if sw & 0x0008:
+                return True
+        return False
+
+    def get_fault_info(self) -> str:
+        """Fault 상태인 슬레이브 목록과 상태어를 문자열로 반환."""
+        faults = []
+        for i in range(self._num_slaves):
+            sw = int(self._shared_states[i * SLOT_SIZE + IDX_STATUS])
+            if sw & 0x0008:
+                faults.append(f"Slave{i}(sw=0x{sw:04X})")
+        return ", ".join(faults) if faults else "none"
 
     def is_homed(self, idx: int) -> bool:
         return self._shared_states[idx * SLOT_SIZE + IDX_HOMED] != 0
