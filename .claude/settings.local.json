@@ -11,7 +11,9 @@
       "Bash(ip link:*)",
       "Read(//home/ihow/motor_ws/**)",
       "Bash(python3 -c \"import pysoem\")",
-      "Bash(ros2 --version)"
+      "Bash(ros2 --version)",
+      "Bash(git ls-tree:*)",
+      "Bash(git restore:*)"
     ]
   }
 }
