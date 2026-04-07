@@ -1,4 +1,4 @@
-# 요청 없음 (단발 쿼리)
+int32 gantry_index   # 0=갠트리0, 1=갠트리1
 ---
 bool    ethercat_connected
 string  cia402_state

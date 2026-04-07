@@ -1,16 +1,15 @@
 """
-move_action_server.py - 목표 좌표 이동 액션 서버
+move_action_server.py - 목표 좌표 이동 액션 서버 (듀얼 갠트리)
 
 액션 타입: motor_control/action/MoveAxis
 토픽:      /motor/move
 
-이동 흐름:
-  1. Goal 수신
-  2. 호밍 미완료 시 Abort
-  3. 소프트웨어 리밋 검사
-  4. X / Z 목표 위치로 이동 명령 전송 (CSV 모드)
-  5. 주기적으로 현재 위치 Feedback 발행
-  6. 이동 완료 후 Result 반환
+goal.gantry_index:
+  0 → 갠트리0만 이동 (gantry0_x/z_target_mm 사용)
+  1 → 갠트리1만 이동 (gantry1_x/z_target_mm 사용)
+  2 → 두 갠트리 동시 이동 (gantry2_x/z_target_mm 를 양쪽에 동일 적용)
+
+이동하지 않을 축에는 -1.0e9 지정.
 """
 
 import time
@@ -22,27 +21,33 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from motor_control_interfaces.action import MoveAxis
 from motor_control.ethercat_interface import (
     EtherCATInterface,
-    Z_MM_PER_REV, X_MM_PER_REV, EFFECTIVE_PPR,
-    mm_s_to_pps, rpm_to_pps,
+    Z_MM_PER_REV, X_MM_PER_REV,
 )
+
+_NO_MOVE = -1.0e9   # "이동 없음" 신호값
 
 
 class MoveAxisActionServer(Node):
 
     def __init__(self, ec: EtherCATInterface,
-                 x_idx: int = 0,
-                 z1_idx: int = 1,
-                 z2_idx: int = 2,
-                 soft_limits: dict = None):
+                 gantry_indices: dict,
+                 soft_limits: dict = None,
+                 max_sync_error_mm: float = 10.0):
+        """
+        Parameters
+        ----------
+        gantry_indices     : {0: (x_idx, z1_idx, z2_idx), 1: (x_idx, z1_idx, z2_idx)}
+        soft_limits        : {0: {x_min, x_max, z_min, z_max}, 1: {...}}
+        max_sync_error_mm  : Z1↔Z2 이동 전 허용 최대 위치 차이 [mm]
+        """
         super().__init__('move_action_server')
 
-        self._ec    = ec
-        self._x     = x_idx
-        self._z1    = z1_idx
-        self._z2    = z2_idx
-        self._limits = soft_limits or {
-            'x_min': 0.0, 'x_max': 1000.0,
-            'z_min': 0.0, 'z_max': 300.0,
+        self._ec                 = ec
+        self._gantry             = gantry_indices
+        self._max_sync_error_mm  = max_sync_error_mm
+        self._limits  = soft_limits or {
+            0: {'x_min': 0.0, 'x_max': 1500.0, 'z_min': -1500.0, 'z_max': 0.1},
+            1: {'x_min': 0.0, 'x_max': 1500.0, 'z_min': -1500.0, 'z_max': 0.1},
         }
 
         self._action_server = ActionServer(
@@ -58,8 +63,7 @@ class MoveAxisActionServer(Node):
 
     def _goal_cb(self, goal_request):
         self.get_logger().info(
-            f"Move Goal 수신: X={goal_request.x_target_mm:.2f}mm, "
-            f"Z={goal_request.z_target_mm:.2f}mm, "
+            f"Move Goal 수신: gantry_index={goal_request.gantry_index}, "
             f"vel={goal_request.velocity_mm_s:.2f}mm/s"
         )
         return GoalResponse.ACCEPT
@@ -71,64 +75,77 @@ class MoveAxisActionServer(Node):
     def _execute_cb(self, goal_handle):
         ec     = self._ec
         result = MoveAxis.Result()
+        req    = goal_handle.request
 
-        x_target   = goal_handle.request.x_target_mm
-        z_target   = goal_handle.request.z_target_mm
-        vel_mms    = goal_handle.request.velocity_mm_s
-        force_move = goal_handle.request.force_move
+        gantry_idx = req.gantry_index
+        vel_mms    = req.velocity_mm_s
+        force_move = req.force_move
 
-        # -1.0e9 를 "이동 없음" 신호로 사용.
-        # 0.0 이나 음수도 유효한 목표이므로 >= 0 으로 판단하면 안 된다.
-        _NO_MOVE = -1.0e9
-        move_x = (x_target > _NO_MOVE)
-        move_z = (z_target > _NO_MOVE)
-
-        if force_move:
-            self.get_logger().warn("force_move=True: 호밍 확인 및 소프트 리밋 검사 생략")
+        # ── 갠트리별 목표 위치 결정 ──
+        if gantry_idx == 2:
+            # 두 갠트리 동시: gantry2_x/z_target_mm 공통 적용
+            targets = {
+                0: (req.gantry2_x_target_mm, req.gantry2_z_target_mm),
+                1: (req.gantry2_x_target_mm, req.gantry2_z_target_mm),
+            }
+            active_gantries = [0, 1]
+        elif gantry_idx == 0:
+            targets = {0: (req.gantry0_x_target_mm, req.gantry0_z_target_mm)}
+            active_gantries = [0]
+        elif gantry_idx == 1:
+            targets = {1: (req.gantry1_x_target_mm, req.gantry1_z_target_mm)}
+            active_gantries = [1]
         else:
-            # ── 호밍 완료 여부 확인 ──
-            if move_z and self._z1 >= 0 and not ec.is_homed(self._z1):
-                result.success = False
-                result.message = "Z1 호밍 미완료. /motor/homing 실행 또는 force_move: true 사용."
-                self.get_logger().error(result.message)
-                goal_handle.abort()
-                return result
+            result.success = False
+            result.message = f"잘못된 gantry_index={gantry_idx}. 0, 1, 2만 유효합니다."
+            goal_handle.abort()
+            return result
 
-            if move_z and self._z2 >= 0 and not ec.is_homed(self._z2):
-                result.success = False
-                result.message = "Z2 호밍 미완료. /motor/homing 실행 또는 force_move: true 사용."
-                self.get_logger().error(result.message)
-                goal_handle.abort()
-                return result
+        if not force_move:
+            self.get_logger().warn("force_move=False: 호밍 확인 및 소프트 리밋 검사 수행")
+        else:
+            self.get_logger().warn("force_move=True: 호밍 확인 및 소프트 리밋 검사 생략")
 
-            if move_x and self._x >= 0 and not ec.is_homed(self._x):
-                result.success = False
-                result.message = "X축 호밍 미완료. /motor/homing 실행 또는 force_move: true 사용."
-                self.get_logger().error(result.message)
-                goal_handle.abort()
-                return result
+        # ── 유효성 검사 (force_move=False 시) ──
+        if not force_move:
+            for g in active_gantries:
+                xi, z1i, z2i = self._gantry[g]
+                x_target, z_target = targets[g]
+                move_x = (x_target > _NO_MOVE)
+                move_z = (z_target > _NO_MOVE)
+                lim    = self._limits[g]
 
-            # ── 소프트웨어 리밋 검사 ──
-            lim = self._limits
-            if move_x and not (lim['x_min'] <= x_target <= lim['x_max']):
-                result.success = False
-                result.message = (
-                    f"X 목표({x_target:.2f}mm)가 소프트 리밋 범위를 벗어남 "
-                    f"[{lim['x_min']}, {lim['x_max']}]"
-                )
-                self.get_logger().error(result.message)
-                goal_handle.abort()
-                return result
-
-            if move_z and not (lim['z_min'] <= z_target <= lim['z_max']):
-                result.success = False
-                result.message = (
-                    f"Z 목표({z_target:.2f}mm)가 소프트 리밋 범위를 벗어남 "
-                    f"[{lim['z_min']}, {lim['z_max']}]"
-                )
-                self.get_logger().error(result.message)
-                goal_handle.abort()
-                return result
+                if move_x and xi >= 0 and not ec.is_homed(xi):
+                    result.success = False
+                    result.message = f"갠트리{g} X 호밍 미완료."
+                    goal_handle.abort()
+                    return result
+                if move_z and z1i >= 0 and not ec.is_homed(z1i):
+                    result.success = False
+                    result.message = f"갠트리{g} Z1 호밍 미완료."
+                    goal_handle.abort()
+                    return result
+                if move_z and z2i >= 0 and not ec.is_homed(z2i):
+                    result.success = False
+                    result.message = f"갠트리{g} Z2 호밍 미완료."
+                    goal_handle.abort()
+                    return result
+                if move_x and not (lim['x_min'] <= x_target <= lim['x_max']):
+                    result.success = False
+                    result.message = (
+                        f"갠트리{g} X 목표({x_target:.2f}mm)가 소프트 리밋 범위 밖 "
+                        f"[{lim['x_min']}, {lim['x_max']}]"
+                    )
+                    goal_handle.abort()
+                    return result
+                if move_z and not (lim['z_min'] <= z_target <= lim['z_max']):
+                    result.success = False
+                    result.message = (
+                        f"갠트리{g} Z 목표({z_target:.2f}mm)가 소프트 리밋 범위 밖 "
+                        f"[{lim['z_min']}, {lim['z_max']}]"
+                    )
+                    goal_handle.abort()
+                    return result
 
         # ── EtherCAT 동작 확인 ──
         if not ec.is_alive():
@@ -137,48 +154,73 @@ class MoveAxisActionServer(Node):
             goal_handle.abort()
             return result
 
-        # ── 속도 설정 (요청 속도가 있을 경우) ──
+        # ── 속도 설정 ──
         if vel_mms > 0.0:
             rpm_z = (vel_mms / Z_MM_PER_REV) * 60.0
             rpm_x = (vel_mms / X_MM_PER_REV) * 60.0
-            if move_z:
-                ec.set_velocity(self._z1, rpm_z)
-                ec.set_velocity(self._z2, rpm_z)
-            if move_x:
-                ec.set_velocity(self._x, rpm_x)
+            for g in active_gantries:
+                xi, z1i, z2i = self._gantry[g]
+                x_target, z_target = targets[g]
+                if (z_target > _NO_MOVE):
+                    if z1i >= 0: ec.set_velocity(z1i, rpm_z)
+                    if z2i >= 0: ec.set_velocity(z2i, rpm_z)
+                if (x_target > _NO_MOVE):
+                    if xi  >= 0: ec.set_velocity(xi,  rpm_x)
 
         # ── 동기화 오류 리셋 ──
         if ec.has_sync_error():
             ec.reset_sync_error()
             time.sleep(0.1)
 
+        # ── 이동 전 Z축 동기화 사전 검사 ──
+        # position-hold 중 벌어진 Z1/Z2 위치 차이를 이동 시작 전에 감지
+        if not force_move:
+            for g in active_gantries:
+                _, z1i, z2i = self._gantry[g]
+                if z1i >= 0 and z2i >= 0:
+                    z1_pos = ec.get_position_mm(z1i, 'z')
+                    z2_pos = ec.get_position_mm(z2i, 'z')
+                    z_diff = abs(z1_pos - z2_pos)
+                    if z_diff > self._max_sync_error_mm:
+                        result.success = False
+                        result.message = (
+                            f"갠트리{g} Z축 동기화 오차({z_diff:.2f}mm)가 "
+                            f"임계값({self._max_sync_error_mm}mm)을 초과합니다. "
+                            f"force_rehome: true 로 호밍을 재수행하세요."
+                        )
+                        self.get_logger().error(result.message)
+                        goal_handle.abort()
+                        return result
+
         # ── 이동 명령 전송 ──
-        if move_z:
-            ec.move_to_mm(self._z1, z_target)
-            ec.move_to_mm(self._z2, z_target)
-            self.get_logger().info(f"Z축 이동: {z_target:.2f}mm")
+        for g in active_gantries:
+            xi, z1i, z2i = self._gantry[g]
+            x_target, z_target = targets[g]
+            move_x = (x_target > _NO_MOVE)
+            move_z = (z_target > _NO_MOVE)
 
-        if move_x:
-            ec.move_to_mm(self._x, x_target)
-            self.get_logger().info(f"X축 이동: {x_target:.2f}mm")
+            if move_z:
+                if z1i >= 0: ec.move_to_mm(z1i, z_target)
+                if z2i >= 0: ec.move_to_mm(z2i, z_target)
+                self.get_logger().info(f"갠트리{g} Z축 이동: {z_target:.2f}mm")
+            if move_x:
+                if xi  >= 0: ec.move_to_mm(xi,  x_target)
+                self.get_logger().info(f"갠트리{g} X축 이동: {x_target:.2f}mm")
 
-        time.sleep(0.2)  # 명령이 서브프로세스에 반영될 시간
+        time.sleep(0.2)  # 서브프로세스 반영 대기
 
-        # ── 이동 완료 대기 & Feedback 발행 ──
+        # ── 이동 완료 대기 & Feedback ──
         feedback_msg = MoveAxis.Feedback()
         t0 = time.monotonic()
         timeout_s = 120.0
 
         while True:
-            # Cancel 확인
             if goal_handle.is_cancel_requested:
-                self.get_logger().info("이동 취소됨.")
                 goal_handle.canceled()
                 result.success = False
                 result.message = "이동 취소됨."
                 return result
 
-            # 타임아웃
             if time.monotonic() - t0 > timeout_s:
                 result.success = False
                 result.message = "이동 타임아웃."
@@ -186,47 +228,79 @@ class MoveAxisActionServer(Node):
                 goal_handle.abort()
                 return result
 
-            # 동기화 오류 확인
             if ec.has_sync_error():
                 result.success = False
-                result.message = "동기화 오류 발생으로 이동 중단."
+                if ec.has_fault():
+                    result.message = (
+                        f"모터 Fault 발생으로 이동 중단. "
+                        f"({ec.get_fault_info()}) "
+                        f"하드 리밋 접촉 또는 과전류 가능성. "
+                        f"소프트 리밋 또는 목표값을 줄이세요."
+                    )
+                else:
+                    result.message = (
+                        "Z축 동기화 오차 초과로 이동 중단. "
+                        "force_rehome: true 로 호밍을 재수행하세요."
+                    )
                 self.get_logger().error(result.message)
                 goal_handle.abort()
                 return result
 
-            # 현재 위치 읽기
-            x_cur  = ec.get_position_mm(self._x,  'x')
-            z1_cur = ec.get_position_mm(self._z1, 'z')
-            z2_cur = ec.get_position_mm(self._z2, 'z')
-            z_cur  = (z1_cur + z2_cur) / 2.0
+            # 위치 읽기 (전체 갠트리)
+            g0_xi, g0_z1i, _ = self._gantry[0]
+            g1_xi, g1_z1i, _ = self._gantry[1]
+            g0_x_cur = ec.get_position_mm(g0_xi,  'x') if g0_xi  >= 0 else 0.0
+            g0_z_cur = ec.get_position_mm(g0_z1i, 'z') if g0_z1i >= 0 else 0.0
+            g1_x_cur = ec.get_position_mm(g1_xi,  'x') if g1_xi  >= 0 else 0.0
+            g1_z_cur = ec.get_position_mm(g1_z1i, 'z') if g1_z1i >= 0 else 0.0
 
-            # Feedback 발행
-            feedback_msg.x_current_mm   = x_cur
-            feedback_msg.z_current_mm   = z_cur
-            feedback_msg.x_remaining_mm = abs(x_target - x_cur) if move_x else 0.0
-            feedback_msg.z_remaining_mm = abs(z_target - z_cur) if move_z else 0.0
+            feedback_msg.gantry0_x_current_mm = g0_x_cur
+            feedback_msg.gantry0_z_current_mm = g0_z_cur
+            feedback_msg.gantry1_x_current_mm = g1_x_cur
+            feedback_msg.gantry1_z_current_mm = g1_z_cur
+
+            g0_xt, g0_zt = targets.get(0, (_NO_MOVE, _NO_MOVE))
+            g1_xt, g1_zt = targets.get(1, (_NO_MOVE, _NO_MOVE))
+            feedback_msg.gantry0_x_remaining_mm = abs(g0_xt - g0_x_cur) if g0_xt > _NO_MOVE else 0.0
+            feedback_msg.gantry0_z_remaining_mm = abs(g0_zt - g0_z_cur) if g0_zt > _NO_MOVE else 0.0
+            feedback_msg.gantry1_x_remaining_mm = abs(g1_xt - g1_x_cur) if g1_xt > _NO_MOVE else 0.0
+            feedback_msg.gantry1_z_remaining_mm = abs(g1_zt - g1_z_cur) if g1_zt > _NO_MOVE else 0.0
             goal_handle.publish_feedback(feedback_msg)
 
-            # 이동 완료 확인
-            x_done = (not move_x) or (not ec.is_moving(self._x))
-            z_done = (not move_z) or (
-                not ec.is_moving(self._z1) and not ec.is_moving(self._z2)
-            )
+            # 완료 확인
+            all_done = True
+            for g in active_gantries:
+                xi, z1i, z2i = self._gantry[g]
+                x_target, z_target = targets[g]
+                move_x = (x_target > _NO_MOVE)
+                move_z = (z_target > _NO_MOVE)
 
-            if x_done and z_done:
+                x_done = (not move_x) or (xi  < 0) or (not ec.is_moving(xi))
+                z_done = (not move_z) or (
+                    (z1i < 0 or not ec.is_moving(z1i)) and
+                    (z2i < 0 or not ec.is_moving(z2i))
+                )
+                if not (x_done and z_done):
+                    all_done = False
+                    break
+
+            if all_done:
                 break
 
             time.sleep(0.05)
 
         # ── 결과 반환 ──
-        x_final = ec.get_position_mm(self._x,  'x')
-        z_final = ec.get_position_mm(self._z1, 'z')
-
-        result.success    = True
-        result.x_final_mm = x_final
-        result.z_final_mm = z_final
-        result.message    = (
-            f"이동 완료: X={x_final:.3f}mm, Z={z_final:.3f}mm"
+        g0_xi, g0_z1i, _ = self._gantry[0]
+        g1_xi, g1_z1i, _ = self._gantry[1]
+        result.success = True
+        result.gantry0_x_final_mm = ec.get_position_mm(g0_xi,  'x') if g0_xi  >= 0 else 0.0
+        result.gantry0_z_final_mm = ec.get_position_mm(g0_z1i, 'z') if g0_z1i >= 0 else 0.0
+        result.gantry1_x_final_mm = ec.get_position_mm(g1_xi,  'x') if g1_xi  >= 0 else 0.0
+        result.gantry1_z_final_mm = ec.get_position_mm(g1_z1i, 'z') if g1_z1i >= 0 else 0.0
+        result.message = (
+            f"이동 완료: "
+            f"갠트리0(X={result.gantry0_x_final_mm:.3f}mm, Z={result.gantry0_z_final_mm:.3f}mm) "
+            f"갠트리1(X={result.gantry1_x_final_mm:.3f}mm, Z={result.gantry1_z_final_mm:.3f}mm)"
         )
         self.get_logger().info(result.message)
         goal_handle.succeed()
