@@ -1,17 +1,37 @@
 # Goal
-float64 x_target_mm    # X축 목표 위치 [mm] (-1 = 현 위치 유지)
-float64 z_target_mm    # Z축 목표 위치 [mm] (-1 = 현 위치 유지)
-float64 velocity_mm_s  # 이동 속도 [mm/s] (0 = 기본값 사용)
-bool    force_move     # true = 호밍 미완료 상태에서도 강제 이동 (소프트 리밋 무시)
+# gantry_index: 0=갠트리0, 1=갠트리1, 2=두 갠트리 동시
+#
+# gantry_index=0 → gantry0_x/z_target_mm 사용
+# gantry_index=1 → gantry1_x/z_target_mm 사용
+# gantry_index=2 → gantry2_x/z_target_mm 사용 (두 갠트리에 동일 적용)
+#
+# 이동하지 않을 축에는 -1.0e9 를 지정
+int32   gantry_index
+
+float64 gantry0_x_target_mm   # 갠트리0 X 목표 [mm]
+float64 gantry0_z_target_mm   # 갠트리0 Z 목표 [mm]
+float64 gantry1_x_target_mm   # 갠트리1 X 목표 [mm]
+float64 gantry1_z_target_mm   # 갠트리1 Z 목표 [mm]
+float64 gantry2_x_target_mm   # 동시 이동 시 공통 X 목표 [mm]
+float64 gantry2_z_target_mm   # 동시 이동 시 공통 Z 목표 [mm]
+
+float64 velocity_mm_s          # 이동 속도 [mm/s] (0 = 기본값 사용)
+bool    force_move             # true = 호밍 미완료·소프트 리밋 무시
 ---
 # Result
 bool    success
-float64 x_final_mm
-float64 z_final_mm
+float64 gantry0_x_final_mm
+float64 gantry0_z_final_mm
+float64 gantry1_x_final_mm
+float64 gantry1_z_final_mm
 string  message
 ---
 # Feedback
-float64 x_current_mm
-float64 z_current_mm
-float64 x_remaining_mm
-float64 z_remaining_mm
+float64 gantry0_x_current_mm
+float64 gantry0_z_current_mm
+float64 gantry1_x_current_mm
+float64 gantry1_z_current_mm
+float64 gantry0_x_remaining_mm
+float64 gantry0_z_remaining_mm
+float64 gantry1_x_remaining_mm
+float64 gantry1_z_remaining_mm
