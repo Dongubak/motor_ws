@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "README.md",
+                "file": "MOTOR_WS_GUIDE.md",
                 "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "README"
+              "title": "MOTOR_WS_GUIDE"
             }
           },
           {
@@ -200,9 +200,10 @@
   "active": "7a150d4fbdd92774",
   "lastOpenFiles": [
     "VELOCITY_GUIDE.md",
+    "MOTOR_WS_GUIDE.md",
+    "README.md",
     "TEST_Z_AXIS.md",
     "TEST_X_AXIS.md",
-    "README.md",
     "RPLIDAR_ROS2_PLAN.md",
     "RPLIDAR_ROS2_PLAN.md.tmp.4570.1774936635336",
     "install/sllidar_ros2/share/sllidar_ros2/launch/__pycache__/view_sllidar_s2_launch.cpython-310.pyc",
