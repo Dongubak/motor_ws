@@ -13,7 +13,9 @@
       "Bash(python3 -c \"import pysoem\")",
       "Bash(ros2 --version)",
       "Bash(git ls-tree:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(gh issue *)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }
