@@ -164,7 +164,7 @@ EtherCATInterface(
 - `goal.gantry_index` 로 이동 대상 갠트리 결정
   - `0` → `gantry0_x/z_target_mm` 사용
   - `1` → `gantry1_x/z_target_mm` 사용
-  - `2` → `gantry2_x/z_target_mm` 를 두 갠트리에 공통 적용
+  - `2` → `gantry0_x/z_target_mm` 를 갠트리0에, `gantry1_x/z_target_mm` 를 갠트리1에 독립 적용
 - 갠트리별 독립 소프트 리밋 검증
 - 갠트리별 Z1-Z2 동기화 오차 실시간 모니터링
 
