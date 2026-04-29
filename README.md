@@ -181,15 +181,21 @@ ros2 action send_goal /motor/homing motor_control_interfaces/action/Homing \
 |---|---|---|
 | `0` | 갠트리0만 이동 | `gantry0_x_target_mm`, `gantry0_z_target_mm` |
 | `1` | 갠트리1만 이동 | `gantry1_x_target_mm`, `gantry1_z_target_mm` |
-| `2` | 두 갠트리 **동시·동일** 이동 | `gantry2_x_target_mm`, `gantry2_z_target_mm` |
+| `2` | 두 갠트리 **동시** 이동 | `gantry0_*` → 갠트리0, `gantry1_*` → 갠트리1 (독립 목표) |
 
 ```bash
 # 두 갠트리 동시·동일 이동 (X=100mm, Z=-50mm)
 ros2 action send_goal /motor/move motor_control_interfaces/action/MoveAxis "{
   gantry_index: 2,
-  gantry0_x_target_mm: -1.0e9, gantry0_z_target_mm: -1.0e9,
-  gantry1_x_target_mm: -1.0e9, gantry1_z_target_mm: -1.0e9,
-  gantry2_x_target_mm: 100.0,  gantry2_z_target_mm: -50.0,
+  gantry0_x_target_mm: 100.0,  gantry0_z_target_mm: -50.0,
+  gantry1_x_target_mm: 100.0,  gantry1_z_target_mm: -50.0,
+  velocity_mm_s: 30.0, force_move: false}"
+
+# 두 갠트리 동시·서로 다른 목표 이동
+ros2 action send_goal /motor/move motor_control_interfaces/action/MoveAxis "{
+  gantry_index: 2,
+  gantry0_x_target_mm: 100.0,  gantry0_z_target_mm: -50.0,
+  gantry1_x_target_mm: 200.0,  gantry1_z_target_mm: -150.0,
   velocity_mm_s: 30.0, force_move: false}"
 
 # 갠트리0만 이동 (X=200mm, Z 유지)
@@ -197,7 +203,6 @@ ros2 action send_goal /motor/move motor_control_interfaces/action/MoveAxis "{
   gantry_index: 0,
   gantry0_x_target_mm: 200.0,  gantry0_z_target_mm: -1.0e9,
   gantry1_x_target_mm: -1.0e9, gantry1_z_target_mm: -1.0e9,
-  gantry2_x_target_mm: -1.0e9, gantry2_z_target_mm: -1.0e9,
   velocity_mm_s: 50.0, force_move: false}"
 ```
 

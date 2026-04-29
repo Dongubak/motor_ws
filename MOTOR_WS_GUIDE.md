@@ -164,7 +164,7 @@ EtherCATInterface(
 - `goal.gantry_index` 로 이동 대상 갠트리 결정
   - `0` → `gantry0_x/z_target_mm` 사용
   - `1` → `gantry1_x/z_target_mm` 사용
-  - `2` → `gantry2_x/z_target_mm` 를 두 갠트리에 공통 적용
+  - `2` → `gantry0_x/z_target_mm` 를 갠트리0에, `gantry1_x/z_target_mm` 를 갠트리1에 독립 적용
 - 갠트리별 독립 소프트 리밋 검증
 - 갠트리별 Z1-Z2 동기화 오차 실시간 모니터링
 
@@ -446,12 +446,10 @@ float64 gantry1_current_z_mm
 # Goal
 int32   gantry_index
 
-float64 gantry0_x_target_mm     # gantry_index=0 시 사용 (-1.0e9 = 현 위치 유지)
+float64 gantry0_x_target_mm     # gantry_index=0,2 시 갠트리0에 적용 (-1.0e9 = 현 위치 유지)
 float64 gantry0_z_target_mm
-float64 gantry1_x_target_mm     # gantry_index=1 시 사용
+float64 gantry1_x_target_mm     # gantry_index=1,2 시 갠트리1에 적용
 float64 gantry1_z_target_mm
-float64 gantry2_x_target_mm     # gantry_index=2 시 두 갠트리 공통 적용
-float64 gantry2_z_target_mm
 
 float64 velocity_mm_s            # 0 = default_velocity_mm_s 사용
 bool    force_move
@@ -585,16 +583,15 @@ result = future.result().get_result_async()
 rclpy.spin_until_future_complete(node, result)
 print(f"호밍 완료: {result.result().result.success}")
 
-# ── 두 갠트리 동시·동일 이동 (gantry_index=2) ─────────
+# ── 두 갠트리 동시 이동 (gantry_index=2) ─────────────
+# gantry0_x/z: 갠트리0 목표, gantry1_x/z: 갠트리1 목표 (값이 같으면 동일 목표 동시 이동)
 move_cli = ActionClient(node, MoveAxis, '/motor/move')
 move_cli.wait_for_server()
 
 goal = MoveAxis.Goal(
     gantry_index=2,
-    gantry0_x_target_mm=-1.0e9, gantry0_z_target_mm=-1.0e9,
-    gantry1_x_target_mm=-1.0e9, gantry1_z_target_mm=-1.0e9,
-    gantry2_x_target_mm=500.0,
-    gantry2_z_target_mm=-200.0,
+    gantry0_x_target_mm=500.0, gantry0_z_target_mm=-200.0,
+    gantry1_x_target_mm=500.0, gantry1_z_target_mm=-200.0,
     velocity_mm_s=50.0,
     force_move=False,
 )
@@ -684,9 +681,15 @@ ros2 action send_goal /motor/homing motor_control_interfaces/action/Homing \
 # 두 갠트리 동시·동일 이동 (X=500mm, Z=-200mm)
 ros2 action send_goal /motor/move motor_control_interfaces/action/MoveAxis "{
   gantry_index: 2,
-  gantry0_x_target_mm: -1.0e9, gantry0_z_target_mm: -1.0e9,
-  gantry1_x_target_mm: -1.0e9, gantry1_z_target_mm: -1.0e9,
-  gantry2_x_target_mm: 500.0,  gantry2_z_target_mm: -200.0,
+  gantry0_x_target_mm: 500.0, gantry0_z_target_mm: -200.0,
+  gantry1_x_target_mm: 500.0, gantry1_z_target_mm: -200.0,
+  velocity_mm_s: 50.0, force_move: false}"
+
+# 두 갠트리 동시·서로다른 목표 이동 (갠트리0: X=300mm Z=-100mm, 갠트리1: X=700mm Z=-300mm)
+ros2 action send_goal /motor/move motor_control_interfaces/action/MoveAxis "{
+  gantry_index: 2,
+  gantry0_x_target_mm: 300.0, gantry0_z_target_mm: -100.0,
+  gantry1_x_target_mm: 700.0, gantry1_z_target_mm: -300.0,
   velocity_mm_s: 50.0, force_move: false}"
 
 # 속도 변경

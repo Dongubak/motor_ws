@@ -234,8 +234,9 @@ class MotorDriverNode(Node):
                 self.get_logger().info("모든 드라이브 준비 완료.")
                 return
             if time.monotonic() - t0 > timeout_s:
-                self.get_logger().warn(
-                    "드라이브 준비 타임아웃. 전원 및 EtherCAT 연결을 확인하세요."
+                self.get_logger().error(
+                    "드라이브 준비 타임아웃. 전원·EtherCAT 연결 확인 또는 "
+                    "이전 프로세스 종료(pkill -9 -f motor_driver_node) 후 재시도하세요."
                 )
                 return
             time.sleep(0.1)
@@ -347,6 +348,17 @@ def main(args=None):
 
     motor_node = MotorDriverNode()
     ec         = motor_node.get_ethercat_interface()
+
+    if not ec.is_alive():
+        motor_node.get_logger().fatal(
+            "EtherCAT 서브프로세스가 시작 직후 종료됐습니다. "
+            "이전 프로세스가 어댑터를 점유 중이거나 어댑터 이름이 잘못됐을 수 있습니다. "
+            "'pkill -9 -f motor_driver_node' 로 이전 프로세스를 종료 후 재시도하세요."
+        )
+        motor_node.destroy_node()
+        rclpy.shutdown()
+        return
+
     gantry_indices  = motor_node.get_gantry_indices()
     x_method, z_method = motor_node.get_homing_methods()
 

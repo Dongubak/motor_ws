@@ -7,7 +7,7 @@ move_action_server.py - 목표 좌표 이동 액션 서버 (듀얼 갠트리)
 goal.gantry_index:
   0 → 갠트리0만 이동 (gantry0_x/z_target_mm 사용)
   1 → 갠트리1만 이동 (gantry1_x/z_target_mm 사용)
-  2 → 두 갠트리 동시 이동 (gantry2_x/z_target_mm 를 양쪽에 동일 적용)
+  2 → 두 갠트리 동시 이동 (gantry0_x/z_target_mm → 갠트리0, gantry1_x/z_target_mm → 갠트리1)
 
 이동하지 않을 축에는 -1.0e9 지정.
 """
@@ -83,10 +83,10 @@ class MoveAxisActionServer(Node):
 
         # ── 갠트리별 목표 위치 결정 ──
         if gantry_idx == 2:
-            # 두 갠트리 동시: gantry2_x/z_target_mm 공통 적용
+            # 두 갠트리 동시: 각 갠트리에 독립적인 목표 적용
             targets = {
-                0: (req.gantry2_x_target_mm, req.gantry2_z_target_mm),
-                1: (req.gantry2_x_target_mm, req.gantry2_z_target_mm),
+                0: (req.gantry0_x_target_mm, req.gantry0_z_target_mm),
+                1: (req.gantry1_x_target_mm, req.gantry1_z_target_mm),
             }
             active_gantries = [0, 1]
         elif gantry_idx == 0:
